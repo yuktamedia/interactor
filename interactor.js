@@ -47,13 +47,16 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
                 interactor.conversions = typeof (config.conversions) == "boolean" ? config.conversions : true;
                 interactor.conversionElement = Array.isArray(config.conversionElement) == true ? config.conversionElement : ['conversion'];
                 interactor.conversionEvents = ['mouseup', 'touchend'];
+                interactor.trackAdditionalData = config.trackAdditionalData;
                 interactor.endpoint = typeof (config.endpoint) == "string" ? config.endpoint : 'https://analytics.yuktamedia.com/api/cdp/v1/datasync';
                 interactor.async = true;
                 interactor.debug = false;
+                interactor.libraryName = 'analytics-web';
+                interactor.libraryVersion = '2.0.0'
                 interactor.apiKey = typeof (config.apiKey) == "string" ? config.apiKey : "";
                 interactor.records = [];
                 interactor.session = {};
-                interactor.loadTime = new Date();
+                interactor.loadTime = new Date().toISOString();
 
                 // Initialize Session
                 interactor.__initializeSession__();
@@ -112,25 +115,20 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
             __addInteraction__: function (e, type) {
 
                 var interactor = this,
-
                     // Interaction Object
-                    interaction = {
-                        type: type,
-                        event: e.type,
+                interaction = {
+                    "channel": "web",
+                    "type": type,
+                    "timestamp": new Date().toISOString(),
+                    "token": interactor.apiKey,
+                    "name": e.type,
+                    "properties": {
                         targetTag: e.target.nodeName,
                         targetClasses: e.target.className,
                         content: e.target.innerText,
-                        clientPosition: {
-                            x: e.clientX,
-                            y: e.clientY
-                        },
-                        screenPosition: {
-                            x: e.screenX,
-                            y: e.screenY
-                        },
-                        createdAt: new Date()
-                    };
-
+                        createdAt: new Date().toISOString()
+                    }
+                };
 
                 // Insert into Records Array
                 interactor.records.push(interaction);
@@ -151,23 +149,48 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
                 // Assign Session Property
                 interactor.session = {
-                    loadTime: interactor.loadTime,
-                    unloadTime: new Date(),
-                    token: interactor.apiKey,
-                    language: window.navigator.language,
-                    platform: window.navigator.platform,
-                    port: window.location.port,
-                    page_path: window.location.pathname,
-                    page_url: window.location.href,
-                    page_origin: window.location.origin,
-                    page_title: document.title,
-                    page_description: interactor.__getContentsOfMeta__("og:description"),
-                    page_type: interactor.__getContentsOfMeta__("og:type"),
-                    page_keywords: interactor.__getContentsOfMeta__("keywords"),
-                    page_author: interactor.__getContentsOfMeta__("author"),
-                    page_tag: interactor.__getContentsOfMeta__("article:tag"),
-                    page_section: interactor.__getContentsOfMeta__("article:section"),
-                    endpoint: interactor.endpoint
+                    "channel": "web",
+                    "type": "page_load",
+                    "timestamp": new Date().toISOString(),
+                    "context": {
+                        "client": {
+                            "name": window.location.hostname,
+                        },
+                        "library": {
+                            "name": interactor.libraryName,
+                            "version": interactor.libraryVersion
+                        },
+                        "os": {
+                            "name": window.navigator.platform,
+                            "version": ""
+                        },
+                        "timezone": new window.Intl.DateTimeFormat().resolvedOptions().timeZone,
+                        "screen": {
+                            "density": "",
+                            "width": window.screen.width,
+                            "height": window.screen.height
+                        },
+                        "userAgent": navigator.userAgent,
+                        "locale": window.navigator.language,
+                    },
+                    "token": interactor.apiKey,
+                    "loadTime": interactor.loadTime,
+                    "unloadTime": new Date().toISOString(),
+                    "name": document.title,
+                    "properties": {
+                        page_path: window.location.pathname,
+                        page_url: window.location.href,
+                        page_origin: window.location.origin,
+                        page_title: document.title,
+                        page_referrer: document.referrer,
+                        page_description: interactor.__getContentsOfMeta__("og:description"),
+                        page_type: interactor.__getContentsOfMeta__("og:type"),
+                        page_keywords: interactor.__getContentsOfMeta__("keywords"),
+                        page_author: interactor.__getContentsOfMeta__("author"),
+                        page_tag: interactor.__getContentsOfMeta__("article:tag"),
+                        page_section: interactor.__getContentsOfMeta__("article:section"),
+                        data: interactor.trackAdditionalData
+                    }
                 };
 
 
@@ -176,20 +199,11 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
             // Insert End of Session Values into Session Property
             __closeSession__: function () {
-
                 var interactor = this;
-
                 // Assign Session Properties
-                interactor.session.unloadTime = new Date();
-                interactor.session.event_type = 'page unload';
-                interactor.session.token = interactor.apiKey;
+                interactor.session.unloadTime = new Date().toISOString();
+                interactor.session.type = 'page_unload'
                 interactor.session.interactions = interactor.records;
-                interactor.session.navigator_app_name = window.navigator.appVersion;
-                interactor.session.navigator_innerWidth = window.innerWidth;
-                interactor.session.navigator_innerHeight = window.innerHeight;
-                interactor.session.navigator_outerWidth = window.outerWidth;
-                interactor.session.navigator_outerHeight = window.outerHeight;
-
                 return interactor;
             },
 
@@ -224,27 +238,45 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
                 xhr.withCredentials = true;
                 xhr.send(
                     JSON.stringify({
-                        event_type: 'page load',
-                        loadTime: new Date(),
-                        token: interactor.apiKey,
-                        language: window.navigator.language,
-                        platform: window.navigator.platform,
-                        port: window.location.port,
-                        navigator_app_name: window.navigator.appVersion,
-                        navigator_innerWidth: window.innerWidth,
-                        navigator_innerHeight: window.innerHeight,
-                        navigator_outerWidth: window.outerWidth,
-                        navigator_outerHeight: window.outerHeight,
-                        page_path: window.location.pathname,
-                        page_url: window.location.href,
-                        page_origin: window.location.origin,
-                        page_title: document.title,
-                        page_description: interactor.__getContentsOfMeta__("og:description"),
-                        page_type: interactor.__getContentsOfMeta__("og:type"),
-                        page_keywords: interactor.__getContentsOfMeta__("keywords"),
-                        page_author: interactor.__getContentsOfMeta__("author"),
-                        page_tag: interactor.__getContentsOfMeta__("article:tag"),
-                        page_section: interactor.__getContentsOfMeta__("article:section")
+                        "channel": "web",
+                        "type": "page_load",
+                        "timestamp": new Date().toISOString(),
+                        "context": {
+                            "client": {
+                                "name": window.location.hostname,
+                            },
+                            "library": {
+                                "name": interactor.libraryName,
+                                "version": interactor.libraryVersion
+                            },
+                            "os": {
+                                "name": window.navigator.platform,
+                                "version": ""
+                            },
+                            "timezone": new window.Intl.DateTimeFormat().resolvedOptions().timeZone,
+                            "screen": {
+                                "density": "",
+                                "width": window.screen.width,
+                                "height": window.screen.height
+                            },
+                            "userAgent": navigator.userAgent,
+                            "locale": window.navigator.language,
+                        },
+                        "token": interactor.apiKey,
+                        "name": document.title,
+                        "properties": {
+                            page_path: window.location.pathname,
+                            page_url: window.location.href,
+                            page_origin: window.location.origin,
+                            page_title: document.title,
+                            page_referrer: document.referrer,
+                            page_description: interactor.__getContentsOfMeta__("og:description"),
+                            page_type: interactor.__getContentsOfMeta__("og:type"),
+                            page_keywords: interactor.__getContentsOfMeta__("keywords"),
+                            page_author: interactor.__getContentsOfMeta__("author"),
+                            page_tag: interactor.__getContentsOfMeta__("article:tag"),
+                            page_section: interactor.__getContentsOfMeta__("article:section")
+                        }
                     })
                 );
                 return interactor;
@@ -270,6 +302,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
             _ConfigObject[_tmpQElement[0]] = _tmpQElement[1];
         });
         var _trackIntractions = false;
+        var _trackData = null;
         var _interactionElementToTrack = [];
         var _trackConversion = false;
         var _conversionElementToTrack = [];
@@ -300,6 +333,10 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
                         _trackConversion = true;
                     }
                     break;
+                case "setData":
+                    if (!typeof _ConfigObject[key] === 'undefined' || typeof _ConfigObject[key] === 'object') {
+                        _trackData = _ConfigObject[key]
+                    }
                 default:
                     break;
             }
@@ -312,6 +349,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
                 interactions: _trackIntractions,
                 interactionElement: _interactionElementToTrack,
                 interactionEvents: ["mouseup", "touchend"],
+                trackAdditionalData: _trackData,
                 conversions: _trackConversion,
                 conversionElement: _conversionElementToTrack,
                 conversionEvents: ["mouseup", "touchend"],
