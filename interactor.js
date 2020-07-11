@@ -302,7 +302,7 @@
                 }
             };
             return ifvisible;
-        });
+        })();
         var Interactor = function (config) {
             // Call Initialization on Interactor Call
             this.__init__(config);
@@ -401,7 +401,7 @@
                 }
 
                 ifvisible.setIdleDuration(interactor.setIdleDuration);
-                ifvisible.on('statusChanged', function(e){
+                ifvisible.on('statusChanged', function(e) {
                     interactor.__sendVisibilityEvent__(e);
                 });
 
@@ -451,7 +451,14 @@
                     "name": "Page " + e.status.charAt(0).toUpperCase() + e.status.slice(1),
                     "context": interactor.context,
                     "loadTime": new Date().toISOString(),
-                    "unloadTime": new Date().toISOString()
+                    "unloadTime": new Date().toISOString(),
+                    "properties": {
+                        page_path: window.location.pathname,
+                        page_url: window.location.href,
+                        page_origin: window.location.origin,
+                        page_title: document.title,
+                        page_referrer: document.referrer
+                    }
                 }));
             },
 
