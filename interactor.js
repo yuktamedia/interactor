@@ -1,33 +1,308 @@
-/*
-BSD 2-Clause License
-
-Copyright (c) 2016, Benjamin Cordier
-All rights reserved.
-
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
-
-* Redistributions of source code must retain the above copyright notice, this
-  list of conditions and the following disclaimer.
-
-* Redistributions in binary form must reproduce the above copyright notice,
-  this list of conditions and the following disclaimer in the documentation
-  and/or other materials provided with the distribution.
-
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
-FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
-CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
-OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-*/
-
 (
     function () {
+        var ifvisible = (function () {
+            var addEvent, customEvent, doc, fireEvent, hidden, idleStartedTime, idleTime, ie, ifvisible, init, initialized, status, trackIdleStatus, visibilityChange;
+            ifvisible = {};
+            doc = document;
+            initialized = false;
+            status = "active";
+            idleTime = 60000;
+            idleStartedTime = false;
+            customEvent = (function () {
+                var S4, addCustomEvent, cgid, fireCustomEvent, guid, listeners, removeCustomEvent;
+                S4 = function () {
+                    return (((1 + Math.random()) * 0x10000) | 0).toString(16).substring(1);
+                };
+                guid = function () {
+                    return S4() + S4() + "-" + S4() + "-" + S4() + "-" + S4() + "-" + S4() + S4() + S4();
+                };
+                listeners = {};
+                cgid = '__ceGUID';
+                addCustomEvent = function (obj, event, callback) {
+                    obj[cgid] = undefined;
+                    if (!obj[cgid]) {
+                        obj[cgid] = "ifvisible.object.event.identifier";
+                    }
+                    if (!listeners[obj[cgid]]) {
+                        listeners[obj[cgid]] = {};
+                    }
+                    if (!listeners[obj[cgid]][event]) {
+                        listeners[obj[cgid]][event] = [];
+                    }
+                    return listeners[obj[cgid]][event].push(callback);
+                };
+                fireCustomEvent = function (obj, event, memo) {
+                    var ev, j, len, ref, results;
+                    if (obj[cgid] && listeners[obj[cgid]] && listeners[obj[cgid]][event]) {
+                        ref = listeners[obj[cgid]][event];
+                        results = [];
+                        for (j = 0, len = ref.length; j < len; j++) {
+                            ev = ref[j];
+                            results.push(ev(memo || {}));
+                        }
+                        return results;
+                    }
+                };
+                removeCustomEvent = function (obj, event, callback) {
+                    var cl, i, j, len, ref;
+                    if (callback) {
+                        if (obj[cgid] && listeners[obj[cgid]] && listeners[obj[cgid]][event]) {
+                            ref = listeners[obj[cgid]][event];
+                            for (i = j = 0, len = ref.length; j < len; i = ++j) {
+                                cl = ref[i];
+                                if (cl === callback) {
+                                    listeners[obj[cgid]][event].splice(i, 1);
+                                    return cl;
+                                }
+                            }
+                        }
+                    } else {
+                        if (obj[cgid] && listeners[obj[cgid]] && listeners[obj[cgid]][event]) {
+                            return delete listeners[obj[cgid]][event];
+                        }
+                    }
+                };
+                return {
+                    add: addCustomEvent,
+                    remove: removeCustomEvent,
+                    fire: fireCustomEvent
+                };
+            })();
+            addEvent = (function () {
+                var setListener;
+                setListener = false;
+                return function (el, ev, fn) {
+                    if (!setListener) {
+                        if (el.addEventListener) {
+                            setListener = function (el, ev, fn) {
+                                return el.addEventListener(ev, fn, false);
+                            };
+                        } else if (el.attachEvent) {
+                            setListener = function (el, ev, fn) {
+                                return el.attachEvent('on' + ev, fn, false);
+                            };
+                        } else {
+                            setListener = function (el, ev, fn) {
+                                return el['on' + ev] = fn;
+                            };
+                        }
+                    }
+                    return setListener(el, ev, fn);
+                };
+            })();
+            fireEvent = function (element, event) {
+                var evt;
+                if (doc.createEventObject) {
+                    return element.fireEvent('on' + event, evt);
+                } else {
+                    evt = doc.createEvent('HTMLEvents');
+                    evt.initEvent(event, true, true);
+                    return !element.dispatchEvent(evt);
+                }
+            };
+            ie = (function () {
+                var all, check, div, undef, v;
+                undef = void 0;
+                v = 3;
+                div = doc.createElement("div");
+                all = div.getElementsByTagName("i");
+                check = function () {
+                    return (div.innerHTML = "<!--[if gt IE " + (++v) + "]><i></i><![endif]-->", all[0]);
+                };
+                while (check()) {
+                    continue;
+                }
+                if (v > 4) {
+                    return v;
+                } else {
+                    return undef;
+                }
+            })();
+            hidden = false;
+            visibilityChange = void 0;
+            if (typeof doc.hidden !== "undefined") {
+                hidden = "hidden";
+                visibilityChange = "visibilitychange";
+            } else if (typeof doc.mozHidden !== "undefined") {
+                hidden = "mozHidden";
+                visibilityChange = "mozvisibilitychange";
+            } else if (typeof doc.msHidden !== "undefined") {
+                hidden = "msHidden";
+                visibilityChange = "msvisibilitychange";
+            } else if (typeof doc.webkitHidden !== "undefined") {
+                hidden = "webkitHidden";
+                visibilityChange = "webkitvisibilitychange";
+            }
+            trackIdleStatus = function () {
+                var timer, wakeUp;
+                timer = false;
+                wakeUp = function () {
+                    clearTimeout(timer);
+                    if (status !== "active") {
+                        ifvisible.wakeup();
+                    }
+                    idleStartedTime = +(new Date());
+                    return timer = setTimeout(function () {
+                        if (status === "active") {
+                            return ifvisible.idle();
+                        }
+                    }, idleTime);
+                };
+                wakeUp();
+                addEvent(doc, "mousemove", wakeUp);
+                addEvent(doc, "keyup", wakeUp);
+                addEvent(doc, "mousedown", wakeUp);
+                addEvent(window, "scroll", wakeUp);
+                addEvent(doc, "touchstart", wakeUp);
+                addEvent(doc, "touchmove", wakeUp);
+                addEvent(doc, "touchcancel", wakeUp);
+                ifvisible.focus(wakeUp);
+                return ifvisible.wakeup(wakeUp);
+            };
+            init = function () {
+                var blur;
+                if (initialized) {
+                    return true;
+                }
+                if (hidden === false) {
+                    blur = "blur";
+                    if (ie < 9) {
+                        blur = "focusout";
+                    }
+                    addEvent(window, blur, function () {
+                        return ifvisible.blur();
+                    });
+                    addEvent(window, "focus", function () {
+                        return ifvisible.focus();
+                    });
+                } else {
+                    addEvent(doc, visibilityChange, function () {
+                        if (doc[hidden]) {
+                            return ifvisible.blur();
+                        } else {
+                            return ifvisible.focus();
+                        }
+                    }, false);
+                }
+                initialized = true;
+                return trackIdleStatus();
+            };
+            ifvisible = {
+                setIdleDuration: function (seconds) {
+                    return idleTime = seconds * 1000;
+                },
+                getIdleDuration: function () {
+                    return idleTime;
+                },
+                getIdleInfo: function () {
+                    var now, res;
+                    now = +(new Date());
+                    res = {};
+                    if (status === "idle") {
+                        res.isIdle = true;
+                        res.idleFor = now - idleStartedTime;
+                        res.timeLeft = 0;
+                        res.timeLeftPer = 100;
+                    } else {
+                        res.isIdle = false;
+                        res.idleFor = now - idleStartedTime;
+                        res.timeLeft = (idleStartedTime + idleTime) - now;
+                        res.timeLeftPer = (100 - (res.timeLeft * 100 / idleTime)).toFixed(2);
+                    }
+                    return res;
+                },
+                focus: function (callback) {
+                    if (typeof callback === "function") {
+                        this.on("focus", callback);
+                    } else {
+                        status = "active";
+                        customEvent.fire(this, "focus");
+                        customEvent.fire(this, "wakeup");
+                        customEvent.fire(this, "statusChanged", {
+                            status: status
+                        });
+                    }
+                    return this;
+                },
+                blur: function (callback) {
+                    if (typeof callback === "function") {
+                        this.on("blur", callback);
+                    } else {
+                        status = "hidden";
+                        customEvent.fire(this, "blur");
+                        customEvent.fire(this, "idle");
+                        customEvent.fire(this, "statusChanged", {
+                            status: status
+                        });
+                    }
+                    return this;
+                },
+                idle: function (callback) {
+                    if (typeof callback === "function") {
+                        this.on("idle", callback);
+                    } else {
+                        status = "idle";
+                        customEvent.fire(this, "idle");
+                        customEvent.fire(this, "statusChanged", {
+                            status: status
+                        });
+                    }
+                    return this;
+                },
+                wakeup: function (callback) {
+                    if (typeof callback === "function") {
+                        this.on("wakeup", callback);
+                    } else {
+                        status = "active";
+                        customEvent.fire(this, "wakeup");
+                        customEvent.fire(this, "statusChanged", {
+                            status: status
+                        });
+                    }
+                    return this;
+                },
+                on: function (name, callback) {
+                    init();
+                    customEvent.add(this, name, callback);
+                    return this;
+                },
+                off: function (name, callback) {
+                    init();
+                    customEvent.remove(this, name, callback);
+                    return this;
+                },
+                onEvery: function (seconds, callback) {
+                    var paused, t;
+                    init();
+                    paused = false;
+                    if (callback) {
+                        t = setInterval(function () {
+                            if (status === "active" && paused === false) {
+                                return callback();
+                            }
+                        }, seconds * 1000);
+                    }
+                    return {
+                        stop: function () {
+                            return clearInterval(t);
+                        },
+                        pause: function () {
+                            return paused = true;
+                        },
+                        resume: function () {
+                            return paused = false;
+                        },
+                        code: t,
+                        callback: callback
+                    };
+                },
+                now: function (check) {
+                    init();
+                    return status === (check || "active");
+                }
+            };
+            return ifvisible;
+        });
         var Interactor = function (config) {
             // Call Initialization on Interactor Call
             this.__init__(config);
@@ -56,7 +331,29 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
                 interactor.apiKey = typeof (config.apiKey) == "string" ? config.apiKey : "";
                 interactor.records = [];
                 interactor.session = {};
+                interactor.setIdleDuration = typeof (config.setIdleDuration) == "number" ? config.setIdleDuration : 60;
                 interactor.loadTime = new Date().toISOString();
+                interactor.context = {
+                    "client": {
+                        "name": window.location.hostname,
+                    },
+                    "library": {
+                        "name": interactor.libraryName,
+                        "version": interactor.libraryVersion
+                    },
+                    "os": {
+                        "name": window.navigator.platform,
+                        "version": ""
+                    },
+                    "timezone": new window.Intl.DateTimeFormat().resolvedOptions().timeZone,
+                    "screen": {
+                        "density": "",
+                        "width": window.screen.width,
+                        "height": window.screen.height
+                    },
+                    "userAgent": navigator.userAgent,
+                    "locale": window.navigator.language,
+                };
 
                 // Initialize Session
                 interactor.__initializeSession__();
@@ -81,7 +378,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
                             e.stopPropagation();
                             for (var j = 0; j < interactor.interactionElement.length; j++) {
                                 if (e.target.classList.value === interactor.interactionElement[j]) {
-                                    interactor.__addInteraction__(e, "interaction");
+                                    interactor.__sendUserAction__(e, "interaction");
                                 }
                             }
                         });
@@ -96,83 +393,78 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
                             e.stopPropagation();
                             for (var l = 0; l < interactor.conversionElement.length; l++) {
                                 if (e.target.classList.value === interactor.conversionElement[l]) {
-                                    interactor.__addInteraction__(e, "conversion");
+                                    interactor.__sendUserAction__(e, "conversion");
                                 }
                             }
                         });
                     }
                 }
 
+                ifvisible.setIdleDuration(interactor.setIdleDuration);
+                ifvisible.on('statusChanged', function(e){
+                    interactor.__sendVisibilityEvent__(e);
+                });
+
                 // Bind onbeforeunload Event
                 window.addEventListener("beforeunload", function (event) {
-                    interactor.__sendInteractions__();
+                    interactor.__sendPageUnload__();
                 });
 
                 return interactor;
             },
 
             // Add Interaction Object Triggered By Events to Records Array
-            __addInteraction__: function (e, type) {
+            __sendUserAction__: function (e, type) {
 
                 var interactor = this,
-                    // Interaction Object
-                interaction = {
+                    xhr = new XMLHttpRequest();
+
+                // Post Session Data Serialized as JSON
+                xhr.open('POST', interactor.endpoint, interactor.async);
+                xhr.setRequestHeader('Content-Type', 'text/plain; charset=UTF-8');
+                xhr.withCredentials = true;
+                xhr.send(JSON.stringify({
                     "channel": "web",
                     "type": type,
                     "timestamp": new Date().toISOString(),
                     "token": interactor.apiKey,
                     "name": e.type,
+                    "context": interactor.context,
                     "properties": {
                         targetTag: e.target.nodeName,
                         targetClasses: e.target.className,
                         content: e.target.innerText,
                         createdAt: new Date().toISOString()
                     }
-                };
-
-                // Insert into Records Array
-                interactor.records.push(interaction);
-
-                // Log Interaction if Debugging
-                if (interactor.debug) {
-                    // Close Session & Log to Console
-                    interactor.__closeSession__();
-                }
+                }));
 
                 return interactor;
+            },
+
+            __sendVisibilityEvent__: function(e) {
+                var interactor = this;
+                navigator.sendBeacon(interactor.endpoint, JSON.stringify({
+                    "channel": "web",
+                    "type": e.status,
+                    "timestamp": new Date().toISOString(),
+                    "token": interactor.apiKey,
+                    "name": "Page " + e.status.charAt(0).toUpperCase() + e.status.slice(1),
+                    "context": interactor.context,
+                    "loadTime": new Date().toISOString(),
+                    "unloadTime": new Date().toISOString()
+                }));
             },
 
             // Generate Session Object & Assign to Session Property
             __initializeSession__: function () {
                 var interactor = this;
 
-
                 // Assign Session Property
                 interactor.session = {
                     "channel": "web",
                     "type": "page_load",
                     "timestamp": new Date().toISOString(),
-                    "context": {
-                        "client": {
-                            "name": window.location.hostname,
-                        },
-                        "library": {
-                            "name": interactor.libraryName,
-                            "version": interactor.libraryVersion
-                        },
-                        "os": {
-                            "name": window.navigator.platform,
-                            "version": ""
-                        },
-                        "timezone": new window.Intl.DateTimeFormat().resolvedOptions().timeZone,
-                        "screen": {
-                            "density": "",
-                            "width": window.screen.width,
-                            "height": window.screen.height
-                        },
-                        "userAgent": navigator.userAgent,
-                        "locale": window.navigator.language,
-                    },
+                    "context": interactor.context,
                     "token": interactor.apiKey,
                     "loadTime": interactor.loadTime,
                     "unloadTime": new Date().toISOString(),
@@ -193,7 +485,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
                     }
                 };
 
-
                 return interactor;
             },
 
@@ -202,28 +493,25 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
                 var interactor = this;
                 // Assign Session Properties
                 interactor.session.unloadTime = new Date().toISOString();
-                interactor.session.type = 'page_unload'
-                interactor.session.interactions = interactor.records;
+                interactor.session.type = 'page_unload';
                 return interactor;
             },
 
-
             // Gather Additional Data and Send Interaction(s) to Server
-            __sendInteractions__: function () {
+            __sendPageUnload__: function () {
 
-                var interactor = this,
+                var interactor = this;
                     // Initialize Cross Header Request
-                    xhr = new XMLHttpRequest();
 
                 // Close Session
                 interactor.__closeSession__();
 
-
+                navigator.sendBeacon(interactor.endpoint, JSON.stringify(interactor.session));
                 // Post Session Data Serialized as JSON
-                xhr.open('POST', interactor.endpoint, interactor.async);
-                xhr.setRequestHeader('Content-Type', 'text/plain; charset=UTF-8');
-                xhr.withCredentials = true;
-                xhr.send(JSON.stringify(interactor.session));
+                // xhr.open('POST', interactor.endpoint, interactor.async);
+                // xhr.setRequestHeader('Content-Type', 'text/plain; charset=UTF-8');
+                // xhr.withCredentials = true;
+                // xhr.send(JSON.stringify(interactor.session));
 
                 return interactor;
             },
@@ -241,29 +529,9 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
                         "channel": "web",
                         "type": "page_load",
                         "timestamp": new Date().toISOString(),
-                        "context": {
-                            "client": {
-                                "name": window.location.hostname,
-                            },
-                            "library": {
-                                "name": interactor.libraryName,
-                                "version": interactor.libraryVersion
-                            },
-                            "os": {
-                                "name": window.navigator.platform,
-                                "version": ""
-                            },
-                            "timezone": new window.Intl.DateTimeFormat().resolvedOptions().timeZone,
-                            "screen": {
-                                "density": "",
-                                "width": window.screen.width,
-                                "height": window.screen.height
-                            },
-                            "userAgent": navigator.userAgent,
-                            "locale": window.navigator.language,
-                        },
+                        "context": interactor.context,
                         "token": interactor.apiKey,
-                        "name": document.title,
+                        "name": "Page Loaded",
                         "properties": {
                             page_path: window.location.pathname,
                             page_url: window.location.href,
@@ -297,12 +565,13 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
         var _yoap = window['YuktaOneAnalyticsPixel'];
         var _yuyo = window[_yoap];
         var _ConfigObject = {};
-        _yuyo.q.forEach(function(i) {
+        _yuyo.q.forEach(function (i) {
             var _tmpQElement = [].slice.call(i);
             _ConfigObject[_tmpQElement[0]] = _tmpQElement[1];
         });
         var _trackIntractions = false;
         var _trackData = null;
+        var _trackIdleDuration;
         var _interactionElementToTrack = [];
         var _trackConversion = false;
         var _conversionElementToTrack = [];
@@ -333,10 +602,16 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
                         _trackConversion = true;
                     }
                     break;
+                case "setIdleDuration":
+                    if (!typeof _ConfigObject[key] === 'undefined' || typeof _ConfigObject[key] === 'number') {
+                        _trackIdleDuration = _ConfigObject[key];
+                    }
+                    break;
                 case "setData":
                     if (!typeof _ConfigObject[key] === 'undefined' || typeof _ConfigObject[key] === 'object') {
-                        _trackData = _ConfigObject[key]
+                        _trackData = _ConfigObject[key];
                     }
+                    break;
                 default:
                     break;
             }
@@ -352,6 +627,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
                 trackAdditionalData: _trackData,
                 conversions: _trackConversion,
                 conversionElement: _conversionElementToTrack,
+                setIdleDuration: _trackIdleDuration,
                 conversionEvents: ["mouseup", "touchend"],
                 endpoint: 'https://analytics.yuktamedia.com/api/cdp/v1/datasync',
                 apiKey: _apiKey,
